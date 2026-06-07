@@ -14,8 +14,8 @@ AI-powered pushup counter with daily challenges, head-to-head battles, leaderboa
 
 | Layer | Tech |
 |-------|------|
-| Mobile app | [Expo](https://expo.dev) (React Native, expo-router, TypeScript) |
-| Pose / rep counting | `react-native-vision-camera` + on-device pose model |
+| Mobile app | [Expo](https://expo.dev) SDK 56 (React 19, RN 0.85, expo-router, TS), via **pnpm** |
+| Pose / rep counting | `react-native-vision-camera` + `react-native-fast-tflite` running **MoveNet** on-device |
 | Backend API | [Go](https://go.dev) (chi router) |
 | Auth | [Clerk](https://clerk.com) |
 | Database | [MongoDB](https://www.mongodb.com) |
@@ -51,27 +51,34 @@ API comes up on `http://localhost:8080`. Health check: `GET /healthz`.
 ```bash
 cd mobile
 cp .env.example .env        # set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY + API_URL
-npm install
-npx expo start
+pnpm install
+pnpm ios   # or: pnpm android
 ```
 
-> Pose detection uses native camera modules, so you'll need a **development build**
-> (`npx expo run:ios` / `run:android`) — it won't run in Expo Go. See `mobile/README.md`.
+> Pose detection uses native camera modules + a bundled TFLite model, so you need a
+> **development build** (`pnpm ios` / `pnpm android`, or an EAS dev build) — it won't
+> run in Expo Go. See `mobile/README.md`.
 
 ## How rep counting works (any camera angle)
 
 The counter never relies on the user's absolute position in frame. Instead it:
 
-1. Runs a pose model per frame to get body keypoints (shoulders, elbows, wrists, hips).
-2. Computes the **elbow joint angle** (shoulder→elbow→wrist) and the torso angle.
+1. **MoveNet** (bundled TFLite model) runs per frame on-device to get body
+   keypoints (shoulders, elbows, wrists, hips).
+2. Computes the **elbow joint angle** (shoulder→elbow→wrist).
 3. Runs a small state machine: a rep is counted on a full `up → down → up`
-   transition, with hysteresis thresholds to reject jitter.
+   transition, with smoothing + hysteresis + debounce to reject jitter.
 
 Because angles are rotation/translation invariant, it works whether the phone is
 on the floor pointed up, on a desk side-on, or held overhead. See
-[`mobile/src/pose/pushupCounter.ts`](mobile/src/pose/pushupCounter.ts).
+[`mobile/src/pose/pushupCounter.ts`](mobile/src/pose/pushupCounter.ts) and the
+camera wiring in [`mobile/app/(tabs)/workout.tsx`](mobile/app/%28tabs%29/workout.tsx).
 
 ## Status
 
-🚧 Early scaffold. Core architecture, API surface, data models, and the rep-counting
-engine are in place. See the issues / TODOs in each package's README.
+Verified so far:
+- ✅ Backend builds and runs live against MongoDB (auth + indexes + routing confirmed)
+- ✅ Mobile bundles through Metro (incl. the TFLite model asset), typechecks, and
+  the rep-counter / pose-mapping unit tests pass (11/11)
+- 🔭 The on-device camera + live MoveNet inference must be verified on a real
+  device via a development build (can't run in a headless/CI container)

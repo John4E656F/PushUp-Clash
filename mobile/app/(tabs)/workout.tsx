@@ -1,18 +1,21 @@
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Camera,
+  runAtTargetFps,
   useCameraDevice,
   useCameraPermission,
   useFrameProcessor,
 } from 'react-native-vision-camera';
-import { runOnJS } from 'react-native-reanimated';
+import { useResizePlugin } from 'vision-camera-resize-plugin';
+import { useTensorflowModel } from 'react-native-fast-tflite';
+import { Worklets } from 'react-native-worklets-core';
 import { useApi } from '@/api/useApi';
 import { Button } from '@/components/ui';
 import { usePushupCounter } from '@/pose/usePushupCounter';
-import type { Pose } from '@/pose/types';
+import { MODEL_INPUT_SIZE, MOVENET_MODEL, mapMoveNetOutput } from '@/pose/poseModel';
 import { colors, radius, spacing } from '@/theme/theme';
 
 export default function Workout() {
@@ -23,51 +26,62 @@ export default function Workout() {
   const device = useCameraDevice('front');
   const { state, onPose, reset } = usePushupCounter();
 
+  // On-device pose model + frame resizer.
+  const { model, state: modelState } = useTensorflowModel(MOVENET_MODEL, []);
+  const { resize } = useResizePlugin();
+
   const [active, setActive] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const startedAt = useRef<number>(0);
+  const activeRef = useRef(false);
 
   useEffect(() => {
     if (!hasPermission) requestPermission();
   }, [hasPermission, requestPermission]);
 
-  // Bridge worklet -> JS. The pose model runs on the frame thread; we hop back
-  // to JS to update the counter/UI.
-  const handlePose = useCallback(
-    (pose: Pose) => {
-      if (active) onPose(pose);
+  // Marshal model output from the frame thread back to JS, then count the rep.
+  const onKeypoints = useCallback(
+    (keypoints: number[]) => {
+      if (!activeRef.current) return;
+      onPose(mapMoveNetOutput(keypoints));
     },
-    [active, onPose],
+    [onPose],
   );
+  const runOnJs = useMemo(() => Worklets.createRunOnJS(onKeypoints), [onKeypoints]);
 
   const frameProcessor = useFrameProcessor(
     (frame) => {
       'worklet';
-      // === POSE MODEL INTEGRATION POINT =====================================
-      // 1. Resize `frame` to the model input (e.g. 192x192) with a resize plugin.
-      // 2. Run the tflite MoveNet/BlazePose model on the pixels.
-      // 3. Map the 17-keypoint output via mapMoveNetOutput() into a Pose.
-      // 4. runOnJS(handlePose)(pose)
-      //
-      // Until the native model is bundled, no poses are emitted and the rep
-      // count stays at 0 (the UI shows a "model not loaded" hint).
-      // Example once wired:
-      //   const out = model.runSync([resized])[0];
-      //   const pose = mapMoveNetOutput(out);
-      //   runOnJS(handlePose)(pose);
-      void frame;
-      void runOnJS;
+      if (model == null) return;
+      // Cap inference to ~12fps — plenty for pushup cadence and easy on battery.
+      runAtTargetFps(12, () => {
+        'worklet';
+        // Center-crop + resize to the model's square uint8 RGB input.
+        const resized = resize(frame, {
+          scale: { width: MODEL_INPUT_SIZE, height: MODEL_INPUT_SIZE },
+          pixelFormat: 'rgb',
+          dataType: 'uint8',
+        });
+        const outputs = model.runSync([resized.buffer as ArrayBuffer]);
+        const out = new Float32Array(outputs[0]);
+        // Copy out of the worklet as a plain array before hopping to JS.
+        const flat: number[] = [];
+        for (let i = 0; i < out.length; i++) flat.push(out[i]);
+        runOnJs(flat);
+      });
     },
-    [handlePose],
+    [model, resize, runOnJs],
   );
 
   function start() {
     reset();
     startedAt.current = Date.now();
+    activeRef.current = true;
     setActive(true);
   }
 
   async function finish() {
+    activeRef.current = false;
     setActive(false);
     const durationSec = Math.max(1, Math.round((Date.now() - startedAt.current) / 1000));
     if (state.reps <= 0) {
@@ -109,6 +123,7 @@ export default function Workout() {
         device={device}
         isActive={true}
         frameProcessor={frameProcessor}
+        pixelFormat="yuv"
       />
 
       {/* HUD overlay */}
@@ -120,14 +135,15 @@ export default function Workout() {
 
         <View style={styles.statusRow}>
           <Text style={[styles.status, { color: state.tracking ? colors.accent : colors.warning }]}>
-            {state.tracking ? `Tracking · ${state.phase.toUpperCase()}` : 'Position yourself in frame'}
+            {modelState !== 'loaded'
+              ? 'Loading AI model…'
+              : state.tracking
+                ? `Tracking · ${state.phase.toUpperCase()}`
+                : 'Position yourself in frame'}
           </Text>
-          {state.angle != null && (
-            <Text style={styles.dim}>elbow {Math.round(state.angle)}°</Text>
-          )}
+          {state.angle != null && <Text style={styles.dim}>elbow {Math.round(state.angle)}°</Text>}
         </View>
 
-        {/* Until a pose model is bundled, make the state explicit. */}
         <Text style={styles.hint}>
           Tip: place the phone anywhere with your whole upper body visible — the AI counts by joint
           angle, not position.
@@ -136,7 +152,7 @@ export default function Workout() {
 
       <View style={[styles.controls, { paddingBottom: insets.bottom + spacing.md }]}>
         {!active ? (
-          <Button title="Start set 💪" onPress={start} />
+          <Button title="Start set 💪" onPress={start} disabled={modelState !== 'loaded'} />
         ) : (
           <View style={styles.controlRow}>
             <Pressable style={styles.resetBtn} onPress={reset}>
