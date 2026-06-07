@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "PushupClash",
+    "slug": "pushupclash",
+    "version": "0.1.0",
+    "scheme": "pushupclash",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0B0B12"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pushupclash.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "PushupClash uses the camera to count your pushup reps with on-device AI."
+      }
+    },
+    "android": {
+      "package": "com.pushupclash.app",
+      "permissions": ["android.permission.CAMERA"]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "PushupClash uses the camera to count your pushup reps with on-device AI."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
