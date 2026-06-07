@@ -34,7 +34,7 @@ func Load() *Config {
 	cfg := &Config{
 		Port:           get("PORT", "8080"),
 		Env:            get("ENV", "development"),
-		MongoURI:       get("MONGO_URI", "mongodb://localhost:27017"),
+		MongoURI:       get("MONGO_URI", get("MONGODB_URI", "mongodb://localhost:27017")),
 		MongoDB:        get("MONGO_DB", "pushupclash"),
 		ClerkSecretKey: get("CLERK_SECRET_KEY", ""),
 		B2Endpoint:     get("B2_ENDPOINT", ""),
