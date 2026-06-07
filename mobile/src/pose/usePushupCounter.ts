@@ -17,6 +17,7 @@ export function usePushupCounter() {
     phase: 'unknown',
     angle: null,
     tracking: false,
+    calibrating: true,
   });
   const lastEmit = useRef(0);
 
@@ -34,7 +35,7 @@ export function usePushupCounter() {
 
   const reset = useCallback(() => {
     counter.reset();
-    setState({ reps: 0, phase: 'unknown', angle: null, tracking: false });
+    setState({ reps: 0, phase: 'unknown', angle: null, tracking: false, calibrating: true });
   }, [counter]);
 
   return { state, onPose, reset };

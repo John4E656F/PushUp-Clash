@@ -1,4 +1,4 @@
-import { useAuth } from '@clerk/clerk-expo';
+import { useAuth } from '@clerk/expo';
 import { Redirect, Stack } from 'expo-router';
 
 // Signed-in users should never see the auth stack.

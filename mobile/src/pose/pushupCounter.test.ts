@@ -1,4 +1,5 @@
 import { PushupCounter, angleDeg, elbowAngle } from './pushupCounter';
+import { mapMoveNetOutput, MOVENET_INDEX } from './movenet';
 import type { Pose } from './types';
 
 const kp = (x: number, y: number, score = 1) => ({ x, y, score });
@@ -38,6 +39,37 @@ describe('elbowAngle', () => {
   });
   it('reads the crafted angle', () => {
     expect(elbowAngle(poseWithAngle(90), 0.3)).toBeCloseTo(90, 0);
+  });
+});
+
+describe('mapMoveNetOutput', () => {
+  it('maps [y,x,score] rows to named keypoints', () => {
+    // 17 keypoints * 3. Seed each value so we can assert the mapping math.
+    const out = new Array(17 * 3).fill(0);
+    const idx = MOVENET_INDEX.leftElbow; // 7
+    out[idx * 3] = 0.4; // y
+    out[idx * 3 + 1] = 0.6; // x
+    out[idx * 3 + 2] = 0.9; // score
+    const pose = mapMoveNetOutput(out);
+    expect(pose.leftElbow).toEqual({ x: 0.6, y: 0.4, score: 0.9 });
+  });
+
+  it('feeds a real pose into the counter end to end', () => {
+    // A flat output with a ~90° left elbow should be readable by the counter.
+    const out = new Array(17 * 3).fill(0);
+    const set = (i: number, y: number, x: number, s = 1) => {
+      out[i * 3] = y;
+      out[i * 3 + 1] = x;
+      out[i * 3 + 2] = s;
+    };
+    set(MOVENET_INDEX.leftShoulder, 0.2, 0.5);
+    set(MOVENET_INDEX.leftElbow, 0.5, 0.5);
+    set(MOVENET_INDEX.leftWrist, 0.5, 0.8);
+    const pose = mapMoveNetOutput(out);
+    const c = new PushupCounter();
+    const s = c.update(pose, 0);
+    expect(s.tracking).toBe(true);
+    expect(Math.round(s.angle ?? 0)).toBe(90);
   });
 });
 
@@ -92,5 +124,28 @@ describe('PushupCounter', () => {
     const c = new PushupCounter();
     const s = c.update({}, 0);
     expect(s.tracking).toBe(false);
+  });
+
+  it('counts a shallow athlete whose "up" never reaches 160° (adaptive thresholds)', () => {
+    // Validated against real MoveNet footage: many people top out ~115-120°, not
+    // 160°. Fixed absolute thresholds would count ZERO here; relative ones work.
+    const c = new PushupCounter();
+    for (let i = 0; i < 4; i++) {
+      feed(c, 120); // "up" — arms not fully locked out
+      feed(c, 70); // "down"
+    }
+    const s = feed(c, 120);
+    expect(s.reps).toBe(4);
+  });
+
+  it('stays in calibration until enough range of motion is seen', () => {
+    const c = new PushupCounter();
+    // Tiny wobble (~4° range) should never trip a rep or leave calibration.
+    for (let i = 0; i < 6; i++) {
+      const s1 = feed(c, 150);
+      const s2 = feed(c, 146);
+      expect(s1.reps).toBe(0);
+      expect(s2.calibrating).toBe(true);
+    }
   });
 });

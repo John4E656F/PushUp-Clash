@@ -20,7 +20,9 @@
     },
     "android": {
       "package": "com.pushupclash.app",
-      "permissions": ["android.permission.CAMERA"]
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -30,7 +32,11 @@
         {
           "cameraPermissionText": "PushupClash uses the camera to count your pushup reps with on-device AI."
         }
-      ]
+      ],
+      "@clerk/expo",
+      "expo-image",
+      "expo-splash-screen",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
