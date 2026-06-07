@@ -69,10 +69,19 @@ The pipeline (all on-device, real-time):
 4. `src/pose/movenet.ts` maps that output into named joints.
 5. `src/pose/pushupCounter.ts` — a pure, unit-tested state machine — counts a rep
    on each `up → down → up` transition of the **elbow joint angle**
-   (shoulder→elbow→wrist), with smoothing + hysteresis + debounce.
+   (shoulder→elbow→wrist), using a median spike-filter + EMA smoothing +
+   **windowed adaptive thresholds** + debounce.
 
 Because it counts by **joint angle** (rotation/translation invariant), it works
 with the phone placed at any angle, as long as your upper body is in frame.
+
+The thresholds are **relative**, not absolute: the counter tracks your own recent
+min/max elbow angle and triggers on excursions within that range. This was driven
+by validating against real footage — people top out anywhere from ~115° to ~170°
+at the top of a pushup and MoveNet under-reports extension, so a fixed `up>=160°`
+rule misses reps. While it learns your range, the HUD shows "Calibrating". See
+[`tools/pose-eval`](../tools/pose-eval) for the offline validation harness that
+runs the bundled model over a real video.
 
 Wiring lives in `app/(tabs)/workout.tsx`. Inference is throttled to ~12fps via
 `runAtTargetFps`.

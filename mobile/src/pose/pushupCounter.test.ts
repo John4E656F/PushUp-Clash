@@ -125,4 +125,27 @@ describe('PushupCounter', () => {
     const s = c.update({}, 0);
     expect(s.tracking).toBe(false);
   });
+
+  it('counts a shallow athlete whose "up" never reaches 160° (adaptive thresholds)', () => {
+    // Validated against real MoveNet footage: many people top out ~115-120°, not
+    // 160°. Fixed absolute thresholds would count ZERO here; relative ones work.
+    const c = new PushupCounter();
+    for (let i = 0; i < 4; i++) {
+      feed(c, 120); // "up" — arms not fully locked out
+      feed(c, 70); // "down"
+    }
+    const s = feed(c, 120);
+    expect(s.reps).toBe(4);
+  });
+
+  it('stays in calibration until enough range of motion is seen', () => {
+    const c = new PushupCounter();
+    // Tiny wobble (~4° range) should never trip a rep or leave calibration.
+    for (let i = 0; i < 6; i++) {
+      const s1 = feed(c, 150);
+      const s2 = feed(c, 146);
+      expect(s1.reps).toBe(0);
+      expect(s2.calibrating).toBe(true);
+    }
+  });
 });

@@ -137,9 +137,11 @@ export default function Workout() {
           <Text style={[styles.status, { color: state.tracking ? colors.accent : colors.warning }]}>
             {modelState !== 'loaded'
               ? 'Loading AI model…'
-              : state.tracking
-                ? `Tracking · ${state.phase.toUpperCase()}`
-                : 'Position yourself in frame'}
+              : !state.tracking
+                ? 'Position yourself in frame'
+                : state.calibrating
+                  ? 'Calibrating — do your first rep…'
+                  : `Tracking · ${state.phase.toUpperCase()}`}
           </Text>
           {state.angle != null && <Text style={styles.dim}>elbow {Math.round(state.angle)}°</Text>}
         </View>

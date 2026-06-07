@@ -79,6 +79,10 @@ camera wiring in [`mobile/app/(tabs)/workout.tsx`](mobile/app/%28tabs%29/workout
 Verified so far:
 - ✅ Backend builds and runs live against MongoDB (auth + indexes + routing confirmed)
 - ✅ Mobile bundles through Metro (incl. the TFLite model asset), typechecks, and
-  the rep-counter / pose-mapping unit tests pass (11/11)
-- 🔭 The on-device camera + live MoveNet inference must be verified on a real
-  device via a development build (can't run in a headless/CI container)
+  the rep-counter / pose-mapping unit tests pass (13/13)
+- ✅ **AI rep counting validated against real pushup video** — the bundled MoveNet
+  model + counting logic were run end-to-end on real footage (see
+  [`tools/pose-eval`](tools/pose-eval)); this is what drove the adaptive,
+  per-user threshold design
+- 🔭 The on-device camera + live frame processor still needs a real device via a
+  development build (a camera can't run in a headless/CI container)
