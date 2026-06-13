@@ -104,3 +104,8 @@ pnpm typecheck   # tsc --noEmit
   a worklets conflict, the fallback is to pin `react-native-reanimated` to v3.
 - New Architecture is **required** (fast-tflite v3 is Nitro-based) and enabled in
   `app.json`.
+- **Do not add `expo-camera`.** It pulls CameraX `1.6.0`, while Vision Camera
+  4.7.3 needs `1.5.0-alpha03`; the version skew makes the internal
+  `Camera2CameraInfoImpl` class fail to resolve at runtime
+  (`NoClassDefFoundError` when reading `CameraDevices`). Vision Camera is the
+  only camera library this app uses.
